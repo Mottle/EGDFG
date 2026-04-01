@@ -8,39 +8,82 @@ from typing import Optional
 
 
 class EnchantedViaDFGLayer(nn.Module):
-    def __init__(self, dim_in, dim_out, dropout, residual, *args, **kwargs):
+    def __init__(
+        self,
+        dim_in,
+        dim_out,
+        dropout,
+        residual=True,
+        norm_type="batchnorm",
+        act="relu",
+        k=3,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.dim_in = dim_in
         self.dim_out = dim_out
         self.dropout = dropout
         self.residual = residual
+        self.k = k
 
         self.structure_conv = GCNConv(dim_in, dim_out)
         self.feature_conv = GCNConv(dim_in, dim_out)
         self.gate_linear = nn.Linear(dim_out * 2, dim_out)
+
+        act_dict = {"relu": F.relu, "leaky_relu": F.leaky_relu, "gelu": F.gelu}
+        self.act_fn = act_dict.get(act, F.relu)
+
+        if norm_type == "batchnorm":
+            self.norm_feat = nn.BatchNorm1d(dim_out)
+            self.norm_stru = nn.BatchNorm1d(dim_out)
+            self.norm_fusion = nn.BatchNorm1d(dim_out)
+        elif norm_type == "layernorm":
+            self.norm_feat = nn.LayerNorm(dim_out)
+            self.norm_stru = nn.LayerNorm(dim_out)
+            self.norm_fusion = nn.LayerNorm(dim_out)
+        else:
+            self.norm_feat = None
+            self.norm_stru = None
+            self.norm_fusion = None
+
+        if self.residual and dim_in != dim_out:
+            self.residual_proj = nn.Linear(dim_in, dim_out)
+        else:
+            self.residual_proj = None
 
     def forward(self, data):
         ori_x = data.x
         batch = data.batch
 
         feature_graph_edge_index = k_farthest_graph(
-            data.x, k=3, batch=batch, loop=True, cosine=True, direction=True
+            data.x, k=self.k, batch=batch, loop=True, cosine=True, direction=True
         )
         feat_x = self.feature_conv(data.x, feature_graph_edge_index)
-        feat_x = F.leaky_relu(feat_x)
-        feat_x = F.dropout(feat_x, self.dropout)
+        feat_x = self.act_fn(feat_x)
+        if self.norm_feat is not None:
+            feat_x = self.norm_feat(feat_x)
+        feat_x = F.dropout(feat_x, self.dropout, training=self.training)
 
         stru_x = self.structure_conv(data.x, data.edge_index)
-        stru_x = F.leaky_relu(stru_x)
-        stru_x = F.dropout(stru_x, self.dropout)
+        stru_x = self.act_fn(stru_x)
+        if self.norm_stru is not None:
+            stru_x = self.norm_stru(stru_x)
+        stru_x = F.dropout(stru_x, self.dropout, training=self.training)
 
         combined = torch.cat([feat_x, stru_x], dim=-1)
         gated = self.gate_linear(combined)
         gated = F.sigmoid(gated)
         fusion_x = gated * feat_x + (1 - gated) * stru_x
 
+        if self.norm_fusion is not None:
+            fusion_x = self.norm_fusion(fusion_x)
+
         if self.residual:
-            fusion_x = fusion_x + ori_x
+            if self.residual_proj is not None:
+                fusion_x = fusion_x + self.residual_proj(ori_x)
+            else:
+                fusion_x = fusion_x + ori_x
 
         data.x = fusion_x
 

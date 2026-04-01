@@ -9,3 +9,17 @@ def custom_gnn_cfg(cfg):
 
     # Use residual connections between the GNN layers.
     cfg.gnn.residual = False
+
+
+@register_config("generic_gnn")
+def generic_gnn_cfg(cfg):
+    """Config for the GenericGNN network with normalization support."""
+
+    # Normalization type: 'batchnorm', 'layernorm', or 'none'
+    cfg.gnn.norm_type = "batchnorm"
+
+    # Activation function: 'relu', 'leaky_relu', 'gelu'
+    cfg.gnn.act = "relu"
+
+    # Use residual connections between the GNN layers.
+    cfg.gnn.residual = True

@@ -50,7 +50,14 @@ Configs in `configs/` organized by model type (GPS, EGDFG, GatedGCN, GINE, Graph
 ### EGDFG Layer
 `gps/layer/egdfg_layer.py` — dual-branch GNN with feature-space (k-farthest neighbors) and structure-space (original edges) convolutions, fused via learned gate.
 - `k_farthest_graph()` uses batched tensor parallelism via `to_dense_batch`
+- Supports configurable `norm_type` (`batchnorm`/`layernorm`/`none`), `act` (`relu`/`leaky_relu`/`gelu`), and `residual` with auto-dim projection
 - Config: `configs/EGDFG/zinc-EGDFG.yaml`
+
+### GenericGNN Model
+`gps/network/generic_gnn.py` — registered as `generic_gnn`, replaces `custom_gnn` for training. Adds per-layer normalization and activation control via config:
+- `gnn.norm_type`: `batchnorm`, `layernorm`, or `none`
+- `gnn.act`: `relu`, `leaky_relu`, `gelu`
+- `gnn.residual`: residual connections with automatic dim projection
 
 ### Model Architecture
 `GPSModel` = node/edge encoders → `GPSLayer` (local GNN + global attention) → graph head.
