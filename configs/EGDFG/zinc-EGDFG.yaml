@@ -34,6 +34,7 @@ gnn:
   layers_mp: 4
   dim_inner: 64
   batchnorm: True
+  norm_type: batchnorm
   act: relu
   dropout: 0.15
   agg: mean
