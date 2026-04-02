@@ -25,7 +25,7 @@
   - 兼容旧键：未设 `gnn.norm_type` 时回退到 `gnn.batchnorm`。
   - 对不支持 `norm_type` 的层（如 `gineconv/gatedgcnconv`），`GenericGNN` 会在层后对 `batch.x` 做外部 norm。
 - EGDFG 任务配置目录：`configs/EGDFG/`，当前包含
-  `zinc-EGDFG.yaml`、`proteins-EGDFG.yaml`、`nci1-EGDFG.yaml`、`nci109-EGDFG.yaml`、`frankenstein-EGDFG.yaml`、`dd-EGDFG.yaml`。
+  `zinc-EGDFG.yaml`、`proteins-EGDFG.yaml`、`nci1-EGDFG.yaml`、`nci109-EGDFG.yaml`、`frankenstein-EGDFG.yaml`、`dd-EGDFG.yaml`、`cifar10-EGDFG.yaml`、`mnist-EGDFG.yaml`、`ogbg-molhiv-EGDFG.yaml`。
 
 ## 数据集与切分坑点
 - 自定义数据入口在 `gps/loader/master_loader.py`（`custom_master_loader`）。
