@@ -575,7 +575,15 @@ def preformat_TUDataset(dataset_dir, name):
     Returns:
         PyG dataset object
     """
-    if name in ["DD", "NCI1", "ENZYMES", "PROTEINS", "TRIANGLES"]:
+    if name in [
+        "DD",
+        "NCI1",
+        "NCI109",
+        "ENZYMES",
+        "PROTEINS",
+        "FRANKENSTEIN",
+        "TRIANGLES",
+    ]:
         func = None
     elif name.startswith("IMDB-") or name == "COLLAB":
         func = T.Constant()

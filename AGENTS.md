@@ -1,84 +1,42 @@
-# Agent Guidelines for GPS Repository
+# AGENTS Guide (EGDFG/GPS)
 
-GPS (Graph Positional Encoding with Self-Attention) is a GNN framework built on PyTorch Geometric.
+## 语言与沟通
+- 默认使用中文。
 
-## Language Preference
-- **默认使用中文交流** (Use Chinese by default)
+## 环境与运行（以可执行配置为准）
+- 使用 `pixi`：`pixi install`，运行命令优先 `pixi run ...`。
+- `pixi.toml` 固定 Python `3.13.1`，PyTorch `2.8` + CUDA `12.9` 轮子（PyG 相关轮子也已固定 URL）。
+- 训练入口是 `main.py`，常用：
+  - `pixi run python main.py --cfg configs/GPS/zinc-GPS+RWSE.yaml wandb.use=False`
+  - `pixi run python main.py --cfg <cfg> --repeat 5 wandb.use=False`
+- `run/run_experiments.sh` 和 `run/wrapper.sb` 是 SLURM+conda(`graphgps`) 工作流，不是本地默认开发路径。
 
-## Environment & Commands
+## 关键执行逻辑（避免改错位置）
+- `main.py` 里 `import gps` 会触发各子模块注册；新增 layer/network/config/train 时必须确保在 `gps/*` 下可被导入。
+- 默认训练模式被 `gps/config/defaults_config.py` 改成 `train.mode=custom`，实际走的是 `gps/train/custom_train.py`。
+- 多次运行规则（`main.py`）：
+  - `--repeat N`：按 seed 递增重复。
+  - 若设置 `cfg.run_multiple_splits`，则必须 `--repeat 1`，否则会抛 `NotImplementedError`。
 
-```bash
-# Install and activate environment
-pixi install
-pixi shell
+## 配置与模型约定
+- 本仓库包名是 `gps/`（README 里仍有 `graphgps/` 旧路径示例，按代码实际路径操作）。
+- `generic_gnn` 的归一化：
+  - 配置键：`gnn.norm_type` in `{batchnorm, layernorm, none}`。
+  - 兼容旧键：未设 `gnn.norm_type` 时回退到 `gnn.batchnorm`。
+  - 对不支持 `norm_type` 的层（如 `gineconv/gatedgcnconv`），`GenericGNN` 会在层后对 `batch.x` 做外部 norm。
+- EGDFG 任务配置目录：`configs/EGDFG/`，当前包含
+  `zinc-EGDFG.yaml`、`proteins-EGDFG.yaml`、`nci1-EGDFG.yaml`、`nci109-EGDFG.yaml`、`frankenstein-EGDFG.yaml`、`dd-EGDFG.yaml`。
 
-# Train with config
-pixi run python main.py --cfg configs/GPS/zinc-GPS+RWSE.yaml wandb.use=False
+## 数据集与切分坑点
+- 自定义数据入口在 `gps/loader/master_loader.py`（`custom_master_loader`）。
+- `PyG-TUDataset` 仅支持硬编码名称；不在白名单会直接报错：
+  - `DD`, `NCI1`, `NCI109`, `ENZYMES`, `PROTEINS`, `FRANKENSTEIN`, `TRIANGLES`, `IMDB-*`, `COLLAB`。
+- split 默认是 `standard`（见 `gps/config/split_config.py`）。
+  - 对无官方固定 split 的任务（如多数 TU 图分类）需在 yaml 显式设 `split_mode: random` 和 `split: [train, val, test]`。
 
-# Run with multiple seeds
-pixi run python main.py --cfg configs/GPS/zinc-GPS+RWSE.yaml --repeat 5 wandb.use=False
-```
-
-## Testing
-
-```bash
-# Run all tests
-python -m pytest unittests/
-
-# Run single test file
-python -m unittest unittests.test_egdfg_layer
-
-# Run specific test
-python -m unittest unittests.test_egdfg_layer.TestKFarthestGraph.test_single_graph_loop_true
-```
-
-## Code Style
-- Use **Black** (>= 26.1.0), max line length 88
-- Import order: stdlib → third-party → local (`gps.*`)
-- Use `Optional[X]` instead of `X | None` (Python 3.13)
-- Module name is `gps/` (not `graphgps/`)
-
-## Architecture
-
-### Config System
-Uses YACS. Key sections: `dataset`, `model`, `train`, `optim`, `gnn`.
-Configs in `configs/` organized by model type (GPS, EGDFG, GatedGCN, GINE, Graphormer, SAN).
-
-### Network Registration
-`gps/network/custom_gnn.py` registers `custom_gnn` network type. Custom layers are added via `build_conv_model()` and referenced as `model.type: custom_gnn` + `gnn.layer_type: <name>` in configs.
-
-### EGDFG Layer
-`gps/layer/egdfg_layer.py` — dual-branch GNN with feature-space (k-farthest neighbors) and structure-space (original edges) convolutions, fused via learned gate.
-- `k_farthest_graph()` uses batched tensor parallelism via `to_dense_batch`
-- Supports configurable `norm_type` (`batchnorm`/`layernorm`/`none`), `act` (`relu`/`leaky_relu`/`gelu`), and `residual` with auto-dim projection
-- Config: `configs/EGDFG/zinc-EGDFG.yaml`
-
-### GenericGNN Model
-`gps/network/generic_gnn.py` — registered as `generic_gnn`, replaces `custom_gnn` for training. Adds per-layer normalization and activation control via config:
-- `gnn.norm_type`: `batchnorm`, `layernorm`, or `none`
-- `gnn.act`: `relu`, `leaky_relu`, `gelu`
-- `gnn.residual`: residual connections with automatic dim projection
-
-### Model Architecture
-`GPSModel` = node/edge encoders → `GPSLayer` (local GNN + global attention) → graph head.
-Supported local GNNs: GCN, GIN, GINE, GAT, PNA, GatedGCN.
-Supported global attention: Transformer, Performer, BigBird.
-
-### Project Structure
-```
-gps/
-├── config/      # Configuration definitions
-├── encoder/     # Node/edge encoders
-├── layer/       # GNN layers (GPSLayer, EGDFG, etc.)
-├── head/        # Graph pooling heads
-├── loader/      # Data loaders
-├── logger.py    # Logging utilities
-├── network/     # Model architectures
-├── pool/        # Graph pooling
-├── stage/       # Model stages
-├── train/       # Training loops
-└── transform/   # Graph transforms
-```
-
-### Positional Encodings
-RWSE, LapPE, EquivStableLapPE, SignNet — implemented in `gps/transform/posenc_stats.py`.
+## 测试与快速验证
+- 全量单测：`python -m pytest unittests/`
+- EGDFG 定向：
+  - `python -m unittest unittests.test_egdfg_layer`
+  - `python -m unittest unittests.test_egdfg_layer.TestKFarthestGraph.test_single_graph_loop_true`
+- 做小改动可先用 `python -m py_compile <file.py>` 做语法冒烟检查。
