@@ -1,0 +1,27 @@
+# OpenCode Agent Rules
+# OpenCode 智能体规则
+
+rules:
+  # 思考时使用中文
+  - name: use_chinese_in_thinking
+    description: 在思考（reasoning）过程中尽量使用中文
+    priority: high
+    pattern: "thinking|reason|思考"
+    language: zh
+
+  # 默认语言设置
+  - name: default_language
+    description: 对话默认使用中文交流
+    priority: high
+    default_language: zh
+
+  # 代码相关使用英文
+  - name: code_english
+    description: 代码、命令、技术术语等使用英文
+    priority: medium
+    code_only: true
+
+preferences:
+  thinking_language: zh
+  response_language: zh
+  include_reasoning: true
